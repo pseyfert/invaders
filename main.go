@@ -2,15 +2,19 @@ package main
 
 import (
 	"bytes"
-	"encoding/base64"
 	"fmt"
 	"image"
 	"image/png"
+	"io"
+	"io/ioutil"
 	"math/rand"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"time"
 
 	"github.com/disintegration/gift"
+	"github.com/google/renameio"
 	termbox "github.com/nsf/termbox-go"
 )
 
@@ -246,10 +250,10 @@ start:
 		} else {
 			time.Sleep(10000000 * time.Nanosecond)
 		}
-		fmt.Println("\n\nSCORE:", score)
 		loop++
 	}
 	termbox.Close()
+	// defer os.RemoveAll(imgbuffer.tmpdir)
 	fmt.Println("\nGAME OVER!\nFinal score:", score)
 }
 
@@ -283,8 +287,30 @@ func collide(s1, s2 Sprite) bool {
 func printImage(img image.Image) {
 	var buf bytes.Buffer
 	png.Encode(&buf, img)
-	imgBase64Str := base64.StdEncoding.EncodeToString(buf.Bytes())
-	fmt.Printf("\x1b[2;0H\x1b]1337;File=inline=1:%s\a", imgBase64Str)
+
+	t, err := renameio.TempFile(imgbuffer.tmpdir, imgbuffer.file)
+	if err != nil {
+		fmt.Println("Cannot create temporary image file:", err)
+	}
+	defer t.Cleanup()
+
+	_, err = t.Write(buf.Bytes())
+	if err != nil {
+		fmt.Println("Cannot write to temporary image file:", err)
+	}
+	err = t.CloseAtomicallyReplace()
+	if err != nil {
+		fmt.Println("Cannot finalize to temporary image file:", err)
+	}
+
+	cmd := exec.Command("/usr/lib/w3m/w3mimgdisplay")
+	comm, err := cmd.StdinPipe()
+	defer comm.Close()
+	if err != nil {
+		fmt.Println("Cannot open stdin to w3mimgdisplay:", err)
+	}
+	cmd.Start()
+	io.WriteString(comm, fmt.Sprintf("0;1;0;0;%d;%d;;;;;%s\n4;\n3;", windowWidth, windowHeight, imgbuffer.file))
 }
 
 func getImage(filePath string) image.Image {
@@ -298,4 +324,20 @@ func getImage(filePath string) image.Image {
 		fmt.Println("Cannot decode file:", err)
 	}
 	return img
+}
+
+type bufferimg struct {
+	tmpdir string
+	file   string
+}
+
+var imgbuffer bufferimg
+
+func init() {
+	var err error
+	imgbuffer.tmpdir, err = ioutil.TempDir("", "invaders")
+	imgbuffer.file = filepath.Join(imgbuffer.tmpdir, "buffer.png")
+	if err != nil {
+		fmt.Println("Cannot create temporary directory:", err)
+	}
 }
