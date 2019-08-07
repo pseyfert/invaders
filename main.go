@@ -311,6 +311,8 @@ func printImage(img image.Image) {
 	}
 	cmd.Start()
 	io.WriteString(comm, fmt.Sprintf("0;1;0;0;%d;%d;;;;;%s\n4;\n3;", windowWidth, windowHeight, imgbuffer.file))
+	comm.Close()
+	cmd.Wait()
 }
 
 func getImage(filePath string) image.Image {
