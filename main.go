@@ -243,6 +243,8 @@ start:
 		// pause a bit before ending the game
 		if gameOver {
 			time.Sleep(time.Second)
+		} else {
+			time.Sleep(10000000 * time.Nanosecond)
 		}
 		fmt.Println("\n\nSCORE:", score)
 		loop++
