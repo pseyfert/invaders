@@ -19,8 +19,12 @@ var windowWidth, windowHeight = 400, 300
 var aliensPerRow = 8
 var aliensStartCol = 100
 var alienSize = 30
-var bombProbability = 0.005
-var bombSpeed = 10
+var bombProbability = 0.001
+var bombSpeed = 2
+var beamSpeed = 2
+var alienYSpeed = 2
+var alienXSpeed = 1
+var canonSpeed = 2
 
 // sprites
 var src = getImage("imgs/sprites.png")
@@ -148,10 +152,10 @@ start:
 					}
 				}
 				if ev.Key == termbox.KeyArrowRight {
-					laserCannon.Position.X += 10
+					laserCannon.Position.X += canonSpeed
 				}
 				if ev.Key == termbox.KeyArrowLeft {
-					laserCannon.Position.X -= 10
+					laserCannon.Position.X -= canonSpeed
 				}
 			}
 
@@ -165,7 +169,7 @@ start:
 
 		// process aliens
 		for i := 0; i < len(aliens); i++ {
-			aliens[i].Position.X = aliens[i].Position.X + 5*alienDirection
+			aliens[i].Position.X = aliens[i].Position.X + alienXSpeed*alienDirection
 			if aliens[i].Status {
 				// if alien is hit by a laser beam
 				if collide(aliens[i], beam) {
@@ -209,7 +213,7 @@ start:
 		if aliens[0].Position.X < alienSize || aliens[aliensPerRow-1].Position.X > windowWidth-(2*alienSize) {
 			alienDirection = alienDirection * -1
 			for i := 0; i < len(aliens); i++ {
-				aliens[i].Position.Y = aliens[i].Position.Y + 10
+				aliens[i].Position.Y = aliens[i].Position.Y + alienYSpeed
 			}
 		}
 
@@ -223,7 +227,7 @@ start:
 		// keep drawing the beam as it moves every loop
 		if beam.Status {
 			beam.Filter.DrawAt(dst, src, image.Pt(beam.Position.X, beam.Position.Y), gift.OverOperator)
-			beam.Position.Y -= 10
+			beam.Position.Y -= beamSpeed
 		}
 
 		// if the beam leaves the window reset it
