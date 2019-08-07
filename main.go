@@ -283,7 +283,7 @@ func collide(s1, s2 Sprite) bool {
 	return false
 }
 
-// this only works for iTerm2!
+// this requires w3mimgdisplay in /usr/lib/w3m and to work with the current terminal emulator
 func printImage(img image.Image) {
 	var buf bytes.Buffer
 	png.Encode(&buf, img)
@@ -305,7 +305,6 @@ func printImage(img image.Image) {
 
 	cmd := exec.Command("/usr/lib/w3m/w3mimgdisplay")
 	comm, err := cmd.StdinPipe()
-	defer comm.Close()
 	if err != nil {
 		fmt.Println("Cannot open stdin to w3mimgdisplay:", err)
 	}
