@@ -253,7 +253,7 @@ start:
 		loop++
 	}
 	termbox.Close()
-	// defer os.RemoveAll(imgbuffer.tmpdir)
+	defer os.RemoveAll(imgbuffer.tmpdir)
 	fmt.Println("\nGAME OVER!\nFinal score:", score)
 }
 
