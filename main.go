@@ -344,18 +344,17 @@ func render_init() {
 	}
 	imgbuffer.w3m_proc.Start()
 	imgbuffer.tmpdir, err = ioutil.TempDir("", "invaders")
+	if err != nil {
+		fmt.Println("Cannot create temporary directory:", err)
+	}
 	cleanchan = make(chan int, 50) // backlog of no more than 50 undeleted images
 	render_step()
 	go concurrent_clean()
 }
 
 func render_step() {
-	var err error
 	imgbuffer.id += 1
 	imgbuffer.file = filepath.Join(imgbuffer.tmpdir, fmt.Sprintf("buffer%d.png", imgbuffer.id))
-	if err != nil {
-		fmt.Println("Cannot create temporary directory:", err)
-	}
 	cleanchan <- imgbuffer.id - 1
 }
 
