@@ -253,7 +253,7 @@ start:
 		loop++
 	}
 	termbox.Close()
-	defer os.RemoveAll(imgbuffer.tmpdir)
+	render_cleanup()
 	fmt.Println("\nGAME OVER!\nFinal score:", score)
 }
 
@@ -285,6 +285,12 @@ func collide(s1, s2 Sprite) bool {
 
 // this requires w3mimgdisplay in /usr/lib/w3m and to work with the current terminal emulator
 func printImage(img image.Image) {
+	if imgbuffer.w3m_proc == nil {
+		render_init()
+	} else {
+		render_step()
+		// io.WriteString(imgbuffer.w3m_pipe, "2;\n")
+	}
 	var buf bytes.Buffer
 	png.Encode(&buf, img)
 
@@ -303,15 +309,7 @@ func printImage(img image.Image) {
 		fmt.Println("Cannot finalize to temporary image file:", err)
 	}
 
-	cmd := exec.Command("/usr/lib/w3m/w3mimgdisplay")
-	comm, err := cmd.StdinPipe()
-	if err != nil {
-		fmt.Println("Cannot open stdin to w3mimgdisplay:", err)
-	}
-	cmd.Start()
-	io.WriteString(comm, fmt.Sprintf("0;1;0;0;%d;%d;;;;;%s\n4;\n3;", windowWidth, windowHeight, imgbuffer.file))
-	comm.Close()
-	cmd.Wait()
+	io.WriteString(imgbuffer.w3m_pipe, fmt.Sprintf("0;1;0;0;%d;%d;;;;;%s\n4;\n3;\n", windowWidth, windowHeight, imgbuffer.file))
 }
 
 func getImage(filePath string) image.Image {
@@ -328,17 +326,53 @@ func getImage(filePath string) image.Image {
 }
 
 type bufferimg struct {
-	tmpdir string
-	file   string
+	tmpdir   string
+	file     string
+	id       int
+	w3m_proc *exec.Cmd
+	w3m_pipe io.WriteCloser
 }
 
 var imgbuffer bufferimg
 
-func init() {
+func render_init() {
 	var err error
+	imgbuffer.w3m_proc = exec.Command("/usr/lib/w3m/w3mimgdisplay")
+	imgbuffer.w3m_pipe, err = imgbuffer.w3m_proc.StdinPipe()
+	if err != nil {
+		fmt.Println("Cannot open stdin to w3mimgdisplay:", err)
+	}
+	imgbuffer.w3m_proc.Start()
 	imgbuffer.tmpdir, err = ioutil.TempDir("", "invaders")
-	imgbuffer.file = filepath.Join(imgbuffer.tmpdir, "buffer.png")
+	cleanchan = make(chan int, 50) // backlog of no more than 50 undeleted images
+	render_step()
+	go concurrent_clean()
+}
+
+func render_step() {
+	var err error
+	imgbuffer.id += 1
+	imgbuffer.file = filepath.Join(imgbuffer.tmpdir, fmt.Sprintf("buffer%d.png", imgbuffer.id))
 	if err != nil {
 		fmt.Println("Cannot create temporary directory:", err)
 	}
+	cleanchan <- imgbuffer.id - 1
+}
+
+var cleanchan chan int
+
+func concurrent_clean() {
+	for {
+		rmid, ok := <-cleanchan
+		if !ok {
+			break
+		}
+		os.Remove(filepath.Join(imgbuffer.tmpdir, fmt.Sprintf("buffer%d.png", rmid)))
+	}
+}
+
+func render_cleanup() {
+	imgbuffer.w3m_pipe.Close()
+	imgbuffer.w3m_proc.Wait()
+	os.RemoveAll(imgbuffer.tmpdir)
 }
