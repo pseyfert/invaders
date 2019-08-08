@@ -1,21 +1,15 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"image"
-	"image/png"
-	"io"
-	"io/ioutil"
 	"math/rand"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"time"
 
 	"github.com/disintegration/gift"
-	"github.com/google/renameio"
 	termbox "github.com/nsf/termbox-go"
+	"github.com/pseyfert/go-w3mimgdisplay"
 )
 
 // parameters
@@ -114,7 +108,7 @@ func main() {
 
 	// show the start screen
 	startScreen := getImage("imgs/start.png")
-	printImage(startScreen)
+	w3mimgdisplay.PrintImage(0, 0, startScreen)
 start:
 	for {
 		switch ev := termbox.PollEvent(); ev.Type {
@@ -243,7 +237,7 @@ start:
 		if aliens[0].Position.Y > 180 {
 			gameOver = true
 		}
-		printImage(dst)
+		w3mimgdisplay.PrintImage(0, 0, dst)
 		// pause a bit before ending the game
 		if gameOver {
 			time.Sleep(time.Second)
@@ -253,7 +247,7 @@ start:
 		loop++
 	}
 	termbox.Close()
-	render_cleanup()
+	w3mimgdisplay.Cleanup()
 	fmt.Println("\nGAME OVER!\nFinal score:", score)
 }
 
@@ -283,35 +277,6 @@ func collide(s1, s2 Sprite) bool {
 	return false
 }
 
-// this requires w3mimgdisplay in /usr/lib/w3m and to work with the current terminal emulator
-func printImage(img image.Image) {
-	if imgbuffer.w3m_proc == nil {
-		render_init()
-	} else {
-		render_step()
-		// io.WriteString(imgbuffer.w3m_pipe, "2;\n")
-	}
-	var buf bytes.Buffer
-	png.Encode(&buf, img)
-
-	t, err := renameio.TempFile(imgbuffer.tmpdir, imgbuffer.file)
-	if err != nil {
-		fmt.Println("Cannot create temporary image file:", err)
-	}
-	defer t.Cleanup()
-
-	_, err = t.Write(buf.Bytes())
-	if err != nil {
-		fmt.Println("Cannot write to temporary image file:", err)
-	}
-	err = t.CloseAtomicallyReplace()
-	if err != nil {
-		fmt.Println("Cannot finalize to temporary image file:", err)
-	}
-
-	io.WriteString(imgbuffer.w3m_pipe, fmt.Sprintf("0;1;0;0;%d;%d;;;;;%s\n4;\n3;\n", windowWidth, windowHeight, imgbuffer.file))
-}
-
 func getImage(filePath string) image.Image {
 	imgFile, err := os.Open(filePath)
 	defer imgFile.Close()
@@ -323,55 +288,4 @@ func getImage(filePath string) image.Image {
 		fmt.Println("Cannot decode file:", err)
 	}
 	return img
-}
-
-type bufferimg struct {
-	tmpdir   string
-	file     string
-	id       int
-	w3m_proc *exec.Cmd
-	w3m_pipe io.WriteCloser
-}
-
-var imgbuffer bufferimg
-
-func render_init() {
-	var err error
-	imgbuffer.w3m_proc = exec.Command("/usr/lib/w3m/w3mimgdisplay")
-	imgbuffer.w3m_pipe, err = imgbuffer.w3m_proc.StdinPipe()
-	if err != nil {
-		fmt.Println("Cannot open stdin to w3mimgdisplay:", err)
-	}
-	imgbuffer.w3m_proc.Start()
-	imgbuffer.tmpdir, err = ioutil.TempDir("", "invaders")
-	if err != nil {
-		fmt.Println("Cannot create temporary directory:", err)
-	}
-	cleanchan = make(chan int, 50) // backlog of no more than 50 undeleted images
-	render_step()
-	go concurrent_clean()
-}
-
-func render_step() {
-	imgbuffer.id += 1
-	imgbuffer.file = filepath.Join(imgbuffer.tmpdir, fmt.Sprintf("buffer%d.png", imgbuffer.id))
-	cleanchan <- imgbuffer.id - 1
-}
-
-var cleanchan chan int
-
-func concurrent_clean() {
-	for {
-		rmid, ok := <-cleanchan
-		if !ok {
-			break
-		}
-		os.Remove(filepath.Join(imgbuffer.tmpdir, fmt.Sprintf("buffer%d.png", rmid)))
-	}
-}
-
-func render_cleanup() {
-	imgbuffer.w3m_pipe.Close()
-	imgbuffer.w3m_proc.Wait()
-	os.RemoveAll(imgbuffer.tmpdir)
 }
